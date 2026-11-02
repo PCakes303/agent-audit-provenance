@@ -96,7 +96,11 @@ class AuditLogTests(unittest.TestCase):
         bad = event(); bad["details"] = {"large": "x" * 5000}
         with self.assertRaises(AuditError):
             validate_event(bad)
-        bad = event(); bad["details"] = {"deep": {"a": {"b": {"c": {"d": {"e": {"f": {"g": {"h": {"i": {"j": {"k": {"l": {"m": {"n": {"o": {"p": 1}}}}}}}}}}}}}}}}
+        bad = event()
+        nested = 1
+        for key in reversed("abcdefghijklmnop"):
+            nested = {key: nested}
+        bad["details"] = {"deep": nested}
         with self.assertRaisesRegex(AuditError, "nesting"):
             validate_event(bad)
 

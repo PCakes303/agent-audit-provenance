@@ -125,13 +125,16 @@ class AuditLogTests(unittest.TestCase):
         from tools import audit_log
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "events.jsonl"
-            path.write_bytes(b"x" * (audit_log.MAX_LOG_BYTES + 1))
-            with self.assertRaisesRegex(AuditError, "byte limit"):
-                read_records(path)
+            from unittest.mock import patch
+            with patch.object(audit_log, "MAX_LOG_BYTES", 8):
+                path.write_bytes(b"x" * 9)
+                with self.assertRaisesRegex(AuditError, "byte limit"):
+                    read_records(path)
             path.write_bytes(b"")
-            bad = event(); bad["details"] = {"blob": "x" * audit_log.MAX_EVENT_BYTES}
-            with self.assertRaises(AuditError):
-                append_event(path, bad)
+            with patch.object(audit_log, "MAX_EVENT_BYTES", 64):
+                bad = event(); bad["details"] = {"blob": "x" * 100}
+                with self.assertRaises(AuditError):
+                    append_event(path, bad)
 
 
 if __name__ == "__main__":

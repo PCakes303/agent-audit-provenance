@@ -149,6 +149,19 @@ def validate_event(event, require_hash=False):
             raise AuditError("event_hash must be a lowercase SHA-256 digest")
 
 
+def load_event_file(path):
+    raw_bytes = Path(path).read_bytes()
+    if len(raw_bytes) > MAX_EVENT_BYTES:
+        raise AuditError("event input exceeds byte limit")
+    try:
+        raw = raw_bytes.decode("utf-8")
+        _check_json_depth(raw)
+        return json.loads(raw, object_pairs_hook=_pairs_no_duplicates,
+                          parse_constant=lambda value: (_ for _ in ()).throw(AuditError(f"invalid JSON number: {value}")))
+    except (UnicodeDecodeError, json.JSONDecodeError, RecursionError) as exc:
+        raise AuditError("event input is invalid UTF-8 or JSON") from exc
+
+
 def append_event(log_path, raw_event):
     if not isinstance(raw_event, dict):
         raise AuditError("event input must be a JSON object")
@@ -171,7 +184,7 @@ def append_event(log_path, raw_event):
     event["previous_hash"] = previous
     event["event_hash"] = digest_event(event)
     validate_event(event, require_hash=True)
-    line = json.dumps(event, sort_keys=True, ensure_ascii=False, allow_nan=False) + "\\n"
+    line = json.dumps(event, sort_keys=True, ensure_ascii=False, allow_nan=False) + "\n"
     encoded_length = len(line.encode("utf-8"))
     if encoded_length > MAX_EVENT_BYTES:
         raise AuditError("serialized event exceeds byte limit")
@@ -234,8 +247,7 @@ def main(argv=None):
     args = parser.parse_args(argv)
     try:
         if args.command == "append":
-            raw = json.loads(Path(args.event).read_text(encoding="utf-8"), object_pairs_hook=_pairs_no_duplicates,
-                             parse_constant=lambda value: (_ for _ in ()).throw(AuditError(f"invalid JSON number: {value}")))
+            raw = load_event_file(args.event)
             event = append_event(args.log, raw)
             print(json.dumps({"status": "appended", "event_id": event["event_id"], "event_hash": event["event_hash"]}, sort_keys=True))
         else:

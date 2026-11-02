@@ -4,7 +4,7 @@ import unittest
 from pathlib import Path
 from jsonschema import Draft202012Validator, FormatChecker
 
-from tools.audit_log import AuditError, append_event, read_records, verify_records, validate_event
+from tools.audit_log import AuditError, append_event, read_records, verify_records, validate_event, load_event_file
 
 ROOT = Path(__file__).resolve().parents[1]
 SCHEMA = json.loads((ROOT / "schemas" / "audit-event.schema.json").read_text(encoding="utf-8"))
@@ -110,6 +110,16 @@ class AuditLogTests(unittest.TestCase):
             path.write_text("\n", encoding="utf-8")
             with self.assertRaisesRegex(AuditError, "blank lines"):
                 read_records(path)
+
+    def test_event_file_parser_limits(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "event.json"
+            path.write_text('{"x":1,"x":2}', encoding="utf-8")
+            with self.assertRaisesRegex(AuditError, "duplicate"):
+                load_event_file(path)
+            path.write_bytes(b"x" * (1_048_577))
+            with self.assertRaisesRegex(AuditError, "byte limit"):
+                load_event_file(path)
 
     def test_log_and_event_byte_limits(self):
         from tools import audit_log
